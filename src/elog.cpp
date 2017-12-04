@@ -9,6 +9,24 @@ namespace {
 	std::mutex			elog_th_mtx;
 	std::shared_ptr<std::thread>	elog_th_stream;
 	std::shared_ptr<std::ofstream>	elog_ostr;
+
+	const char* get_level_str(const uint8_t level) {
+		switch(level) {
+		case elog::level_debug:
+			return "DEBUG";
+		case elog::level_info:
+			return "INFO";
+		case elog::level_warning:
+			return "WARN";
+		case elog::level_error:
+			return "ERR";
+		case elog::level_fatal:
+			return "FATAL";
+		default:
+			break;
+		};
+		return "UNKNOWN";
+	}
 }
 
 std::condition_variable	elog::cv_notify_log;
@@ -26,10 +44,11 @@ void elog::entry::to_stream(std::ostream& ostr) const {
 	std::sprintf(tm_fmt, "%%Y-%%m-%%dT%%H:%%M:%%S.%03i", static_cast<int>(duration_cast<milliseconds>(tp.time_since_epoch()).count()%1000));
 	std::strftime(tm_buf, sizeof(tm_buf), tm_fmt, &res);
 
-	ostr << tm_buf << "\t[" << th_id << "] ";
-
 	const uint8_t	*lcl_type = typelist,
 			*lcl_buf = buffer;
+	// first preamble
+	ostr << tm_buf << "\t[" << th_id << "](" << get_level_str(*lcl_buf++) << ") ";
+	// proceed with each type
 	for( ; lcl_type != cur_type; ++lcl_type) {
 		switch(*lcl_type) {
 		case t_char:

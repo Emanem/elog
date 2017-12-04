@@ -36,7 +36,9 @@ namespace elog {
 #endif //PERF_TEST
 						sizeof(cur_type)+
 						sizeof(cur_buf)+
-						sizeof(typelist))]; //make sure whole structure is 512b
+						sizeof(typelist))];	// make sure whole structure is 512b
+									// the first byte of this buffer is
+									// used to store the level
 
 		static const size_t	s_free = 0,
 					s_assigned = 1,
@@ -163,10 +165,11 @@ namespace elog {
 		void to_stream(std::ostream& ostr) const;
 
 		template<typename... Args>
-		void write(Args... args) {
+		void write(const uint8_t level, Args... args) {
 			assert(status == s_assigned);
 			tp = std::chrono::high_resolution_clock::now();
 			th_id = std::this_thread::get_id();
+			*cur_buf++ = level;
 			write_pvt(args...);
 		}
 	};
@@ -203,8 +206,9 @@ namespace elog {
 }
 
 #define	ELOG_INIT(x)		elog::logger::instance().init(x)
-#define	ELOG( ... )		elog::logger::instance().get_entry()->write(__VA_ARGS__)
-#define	ELOG_LEVEL(l, ... )	{ if((l) & elog::logger::instance().get_level()) elog::logger::instance().get_entry()->write(__VA_ARGS__); }
+#define	ELOG_GET_LEVEL()	elog::logger::instance().get_level()
+#define	ELOG_SET_LEVEL(x)	elog::logger::instance().set_level(x)
+#define	ELOG_LEVEL(l, ... )	{ const uint8_t cur_level__ = (l); if(cur_level__ & ELOG_GET_LEVEL()) elog::logger::instance().get_entry()->write(cur_level__, __VA_ARGS__); }
 #define	ELOG_DEBUG( ... )	ELOG_LEVEL(elog::level_debug, __VA_ARGS__)
 #define	ELOG_INFO( ... )	ELOG_LEVEL(elog::level_info, __VA_ARGS__)
 #define	ELOG_WARNING( ... )	ELOG_LEVEL(elog::level_warning, __VA_ARGS__)
