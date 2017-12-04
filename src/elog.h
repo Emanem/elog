@@ -16,7 +16,8 @@ namespace elog {
 				level_info = 0x02,
 				level_warning = 0x04,
 				level_error = 0x08,
-				level_fatal = 0x10;
+				level_fatal = 0x10,
+				level_all = (level_debug|level_info|level_warning|level_error|level_fatal);
 
 	extern std::condition_variable	cv_notify_log;
 
@@ -181,7 +182,7 @@ namespace elog {
 		entry			*entries;
 		volatile uint8_t	level;
 
-		logger() : is_init(false), entry_sz(0), entry_hint(0), entries(0), level(0xFF) {
+		logger() : is_init(false), entry_sz(0), entry_hint(0), entries(0), level(level_all) {
 		}
 		~logger();
 		logger(logger const&) = delete;
