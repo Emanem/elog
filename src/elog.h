@@ -12,6 +12,12 @@
 
 namespace elog {
 
+	static const uint8_t	level_debug = 0x01,
+				level_info = 0x02,
+				level_warning = 0x04,
+				level_error = 0x08,
+				level_fatal = 0x10;
+
 	extern std::condition_variable	cv_notify_log;
 
 	class entry {
@@ -170,8 +176,9 @@ namespace elog {
 		size_t			entry_sz;
 		std::atomic<size_t>	entry_hint;
 		entry			*entries;
+		volatile uint8_t	level;
 
-		logger() : is_init(false), entry_sz(0), entry_hint(0), entries(0) {
+		logger() : is_init(false), entry_sz(0), entry_hint(0), entries(0), level(0xFF) {
 		}
 		~logger();
 		logger(logger const&) = delete;
@@ -184,12 +191,26 @@ namespace elog {
 		void cleanup(void);
 
 		entry* get_entry(void);
+
+		uint8_t get_level(void) const {
+			return level;
+		}
+
+		void set_level(const uint8_t new_level) {
+			level = new_level;
+		}
 	};
 }
 
-#define	LOG_INIT(x)	elog::logger::instance().init(x)
-#define	LOG( ... )	elog::logger::instance().get_entry()->write(__VA_ARGS__)
-#define LOG_CLEANUP()	elog::logger::instance().cleanup()
+#define	ELOG_INIT(x)		elog::logger::instance().init(x)
+#define	ELOG( ... )		elog::logger::instance().get_entry()->write(__VA_ARGS__)
+#define	ELOG_LEVEL(l, ... )	{ if((l) & elog::logger::instance().get_level()) elog::logger::instance().get_entry()->write(__VA_ARGS__); }
+#define	ELOG_DEBUG( ... )	ELOG_LEVEL(elog::level_debug, __VA_ARGS__)
+#define	ELOG_INFO( ... )	ELOG_LEVEL(elog::level_info, __VA_ARGS__)
+#define	ELOG_WARNING( ... )	ELOG_LEVEL(elog::level_warning, __VA_ARGS__)
+#define	ELOG_ERROR( ... )	ELOG_LEVEL(elog::level_error, __VA_ARGS__)
+#define	ELOG_FATAL( ... )	ELOG_LEVEL(elog::level_fatal, __VA_ARGS__)
+#define	ELOG_CLEANUP()		elog::logger::instance().cleanup()
 
 #endif //_ELOG_H_
 
