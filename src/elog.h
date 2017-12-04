@@ -7,6 +7,8 @@
 #include <atomic>
 #include <cassert>
 #include <condition_variable>
+#include <chrono>
+#include <thread>
 
 namespace elog {
 
@@ -14,11 +16,15 @@ namespace elog {
 
 	class entry {
 		std::atomic<size_t>	status;
+		std::chrono::time_point<std::chrono::high_resolution_clock>	tp;
+		std::thread::id		th_id;
 		uint8_t			*cur_type,
 					*cur_buf,
 					typelist[16],
 					buffer[512 - 
 						(sizeof(status)+
+						sizeof(tp)+
+						sizeof(th_id)+
 #ifdef PERF_TEST
 						sizeof(size_t)+
 #endif //PERF_TEST
@@ -114,6 +120,17 @@ namespace elog {
 
 		entry(entry const&) = delete;
 		entry& operator=(entry const&) = delete;
+
+		void write_pvt(void) {
+			status.store(s_filled, std::memory_order_release);
+			cv_notify_log.notify_one();
+		}
+
+		template<typename T, typename... Args>
+		void write_pvt(const T& t, Args... args) {
+			add(t);
+			write_pvt(args...);
+		}
 	public:
 #ifdef PERF_TEST
 		size_t			tries;
@@ -139,16 +156,12 @@ namespace elog {
 
 		void to_stream(std::ostream& ostr) const;
 
-		void write(void) {
-			status.store(s_filled, std::memory_order_release);
-			cv_notify_log.notify_one();
-		}
-
-		template<typename T, typename... Args>
-		void write(const T& t, Args... args) {
+		template<typename... Args>
+		void write(Args... args) {
 			assert(status == s_assigned);
-			add(t);
-			write(args...);
+			tp = std::chrono::high_resolution_clock::now();
+			th_id = std::this_thread::get_id();
+			write_pvt(args...);
 		}
 	};
 

@@ -1,9 +1,8 @@
 #include "elog.h"
-#include <thread>
 #include <memory>
 #include <mutex>
 #include <fstream>
-#include <chrono>
+#include <ctime>
 
 namespace {
 	std::atomic<bool>		elog_stop(false);
@@ -15,6 +14,20 @@ namespace {
 std::condition_variable	elog::cv_notify_log;
 
 void elog::entry::to_stream(std::ostream& ostr) const {
+	// start printing out the timestamp in ISO format
+	// and the thread_id
+	using namespace std::chrono;
+	const auto	tp_tm = time_point_cast<system_clock::duration>(tp);
+	const auto	tm_t = system_clock::to_time_t(tp_tm);
+	struct tm	res = {0};
+	localtime_r(&tm_t, &res);
+	char		tm_fmt[32],
+			tm_buf[32];
+	std::sprintf(tm_fmt, "%%Y-%%m-%%dT%%H:%%M:%%S.%03i", static_cast<int>(duration_cast<milliseconds>(tp.time_since_epoch()).count()%1000));
+	std::strftime(tm_buf, sizeof(tm_buf), tm_fmt, &res);
+
+	ostr << tm_buf << "\t[" << th_id << "] ";
+
 	const uint8_t	*lcl_type = typelist,
 			*lcl_buf = buffer;
 	for( ; lcl_type != cur_type; ++lcl_type) {
