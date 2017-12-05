@@ -28,6 +28,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <thread>
+#include <string>
 
 namespace elog {
 
@@ -121,6 +122,18 @@ namespace elog {
 			if((cur_type - typelist) == sizeof(typelist)) return;
 			static const int	MAX_LEN=127;
 			const char*		p = i;
+			int			cnt = 0;
+			while((*p) && (cnt++ < MAX_LEN)) {
+				if((cur_buf - buffer) >= static_cast<int>(sizeof(buffer))) break;
+				*cur_buf++ = *p++;
+			}
+			*cur_type++ = t_str | cnt;
+		}
+
+		void add(const std::string& s) {
+			if((cur_type - typelist) == sizeof(typelist)) return;
+			static const int	MAX_LEN=127;
+			const char*		p = s.c_str();
 			int			cnt = 0;
 			while((*p) && (cnt++ < MAX_LEN)) {
 				if((cur_buf - buffer) >= static_cast<int>(sizeof(buffer))) break;
