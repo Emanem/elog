@@ -103,9 +103,8 @@ void elog::entry::to_stream(std::ostream& ostr) const {
 		default: // strings
 			if((*lcl_type) & t_str) {
 				const int	sz = ((*lcl_type)&t_strmask);
-				// this needs optimization ofc...
-				for(int i = 0; i < sz; i++)
-					ostr.write(reinterpret_cast<const char*>(lcl_buf++), 1);
+				ostr.write(reinterpret_cast<const char*>(lcl_buf), sz);
+				lcl_buf += sz;
 			}
 			break;
 		}
