@@ -124,6 +124,9 @@ void elog::entry::to_stream(std::ostream& ostr) const {
 #endif //PERF_TEST
 }
 
+elog::exception::exception(const char* e): std::runtime_error(e) {
+}
+
 elog::logger::~logger() {
 	cleanup();
 }
@@ -222,7 +225,7 @@ void elog::logger::cleanup(void) {
 }
 
 elog::entry* elog::logger::get_entry(void) {
-	if(status != s_init) throw std::runtime_error("elog not initialized");
+	if(status != s_init) throw exception("elog not initialized");
 #ifdef PERF_TEST
 	size_t	lcl_tries = 0;
 #endif //PERF_TEST

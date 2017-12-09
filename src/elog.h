@@ -32,6 +32,11 @@
 
 namespace elog {
 
+	class exception : public std::runtime_error {
+	public:
+		exception(const char*);
+	};
+
 	class logger;
 
 	static const uint8_t	level_debug = 0x01,
