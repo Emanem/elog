@@ -46,6 +46,13 @@ namespace {
 		};
 		return "UNKNOWN";
 	}
+
+	// writing to stream
+	template<typename T>
+	void to_stream_el(std::ostream& ostr, const uint8_t*& p) {
+		ostr << *reinterpret_cast<const T*>(p);
+		p += sizeof(T);
+	}
 }
 
 std::condition_variable	elog::cv_notify_log;
@@ -117,7 +124,7 @@ void elog::entry::to_stream(std::ostream& ostr) const {
 }
 
 elog::logger::~logger() {
-	if(is_init) cleanup();
+	cleanup();
 }
 
 elog::logger& elog::logger::instance(void) {
@@ -126,7 +133,11 @@ elog::logger& elog::logger::instance(void) {
 }
 
 void elog::logger::init(const char* fname, const size_t e_sz) {
-	if(is_init) throw std::runtime_error("elog already initialized");
+	// check is not being already initialized...
+	size_t	cur_status = s_not_init;
+	if(!status.compare_exchange_strong(cur_status, s_start_init))
+		return;
+	// proceed with initialization
 	entry_sz = e_sz;
 	entries = new entry[entry_sz];
 	elog_stop = false;
@@ -148,11 +159,15 @@ void elog::logger::init(const char* fname, const size_t e_sz) {
 			}
 		}
 	));
-	is_init.store(true, std::memory_order_release);
+	status.store(s_init, std::memory_order_release);
 }
 
 void elog::logger::cleanup(void) {
-	if(!is_init) throw std::runtime_error("elog not initialized");
+	// check status is initialized
+	size_t	cur_status = s_init;
+	if(!status.compare_exchange_strong(cur_status, s_start_clean))
+		return;
+	// do the cleanup
 	elog_stop = true;
 	elog_th_stream->join();
 	// one last scan through all avaliable logs and print!
@@ -164,11 +179,11 @@ void elog::logger::cleanup(void) {
 	}
 	delete [] entries;
 	elog_ostr.reset();
-	is_init.store(false, std::memory_order_release);
+	status.store(s_not_init, std::memory_order_release);
 }
 
 elog::entry* elog::logger::get_entry(void) {
-	if(!is_init) throw std::runtime_error("elog not initialized");
+	if(status != s_init) throw std::runtime_error("elog not initialized");
 #ifdef PERF_TEST
 	size_t	lcl_tries = 0;
 #endif //PERF_TEST

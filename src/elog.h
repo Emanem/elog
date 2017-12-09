@@ -144,13 +144,6 @@ namespace elog {
 			cur_buf += sizeof(T);
 		}
 
-		// writing to stream
-		template<typename T>
-		void to_stream_el(std::ostream& ostr, const uint8_t*& p) const {
-			ostr << *reinterpret_cast<const T*>(p);
-			p += sizeof(T);
-		}
-
 		entry(entry const&) = delete;
 		entry& operator=(entry const&) = delete;
 
@@ -200,13 +193,24 @@ namespace elog {
 	};
 
 	class logger {
-		std::atomic<bool>	is_init;
+		/*
+		Values for status:
+		0 - not initialized
+		1 - being initialized
+		2 - initialized (usable)
+		3 - being cleanup (goes back to 0)
+		*/
+		const static size_t	s_not_init = 0,
+					s_start_init = 1,
+					s_init = 2,
+					s_start_clean = 3;
+		std::atomic<size_t>	status;
 		size_t			entry_sz;
 		std::atomic<size_t>	entry_hint;
 		entry			*entries;
 		volatile uint8_t	level;
 
-		logger() : is_init(false), entry_sz(0), entry_hint(0), entries(0), level(level_all) {
+		logger() : status(s_not_init), entry_sz(0), entry_hint(0), entries(0), level(level_all) {
 		}
 		~logger();
 		logger(logger const&) = delete;
