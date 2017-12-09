@@ -29,7 +29,7 @@ int main(int argc, const char *argv[]) {
 	for(size_t i = 0; i < 1024*1024; ++i) {
 		ELOG_INFO(__FILE__, ':', __LINE__, " a counter number: ", i);
 		ELOG_FATAL("This is a test!");
-		if(i > 512*1024) ELOG_SET_LEVEL(elog::level_fatal);
+		//if(i > 512*1024) ELOG_SET_LEVEL(elog::level_fatal);
 	}
 	ELOG_CLEANUP();
 }

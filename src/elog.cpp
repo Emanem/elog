@@ -22,6 +22,7 @@
 #include <mutex>
 #include <fstream>
 #include <ctime>
+#include <algorithm>
 
 namespace {
 	std::atomic<bool>		elog_stop(false);
@@ -73,7 +74,7 @@ void elog::entry::to_stream(std::ostream& ostr) const {
 	const uint8_t	*lcl_type = typelist,
 			*lcl_buf = buffer;
 	// first preamble
-	ostr << tm_buf << "\t[" << th_id << "](" << get_level_str(*lcl_buf++) << ") ";
+	ostr << tm_buf << " [" << th_id << "](" << get_level_str(*lcl_buf++) << ") ";
 	// proceed with each type
 	for( ; lcl_type != cur_type; ++lcl_type) {
 		switch(*lcl_type) {
@@ -132,7 +133,7 @@ elog::logger& elog::logger::instance(void) {
 	return l;
 }
 
-void elog::logger::init(const char* fname, const size_t e_sz) {
+void elog::logger::init(const char* fname, const bool s_ordering, const size_t e_sz) {
 	// check is not being already initialized...
 	size_t	cur_status = s_not_init;
 	if(!status.compare_exchange_strong(cur_status, s_start_init))
@@ -142,23 +143,60 @@ void elog::logger::init(const char* fname, const size_t e_sz) {
 	entries = new entry[entry_sz];
 	elog_stop = false;
 	elog_ostr = std::shared_ptr<std::ofstream>(new std::ofstream(fname));
-	elog_th_stream = std::shared_ptr<std::thread>(new std::thread(
-		[this]() -> void {
-			while(!elog_stop) {
-				// wait for a notification
-				std::unique_lock<std::mutex> l_(elog_th_mtx);
-				cv_notify_log.wait_for(l_, std::chrono::milliseconds(250));
-				// then scan through all avaliable logs and print!
-				for(size_t i = 0; i < entry_sz; ++i) {
-					if(!entries[i].is_filled()) continue;
-					// otherwise print and reset it
-					entries[i].to_stream(*elog_ostr);
-					entries[i].reset();
-					entry_hint = i;
+	// why do we have duplicated code like this to manage the log
+	// ordering level?
+	// using a std::function<void (void)> would imply basically
+	// a virtual call... we should refactor this, but using local
+	// functions...
+	if(!s_ordering) {
+		elog_th_stream = std::shared_ptr<std::thread>(new std::thread(
+			[this]() -> void {
+				while(!elog_stop) {
+					// wait for a notification
+					std::unique_lock<std::mutex> l_(elog_th_mtx);
+					cv_notify_log.wait_for(l_, std::chrono::milliseconds(250));
+					// then scan through all avaliable logs and print!
+					for(size_t i = 0; i < entry_sz; ++i) {
+						if(!entries[i].is_filled()) continue;
+						// otherwise print and reset it
+						entries[i].to_stream(*elog_ostr);
+						entries[i].reset();
+						entry_hint = i;
+					}
 				}
 			}
-		}
-	));
+		));
+	} else {
+		elog_th_stream = std::shared_ptr<std::thread>(new std::thread(
+			[this]() -> void {
+				entry*	p_entries[entry_sz];
+				while(!elog_stop) {
+					// wait for a notification
+					std::unique_lock<std::mutex> l_(elog_th_mtx);
+					cv_notify_log.wait_for(l_, std::chrono::milliseconds(250));
+					// get current timepoint
+					const auto	log_tp = std::chrono::high_resolution_clock::now();
+					// then scan through all avaliable logs and select them!
+					size_t		selected_entries = 0;
+					for(size_t i = 0; i < entry_sz; ++i) {
+						if(!entries[i].is_filled()) continue;
+						// ensure tp <= log_tp...
+						if(entries[i].tp > log_tp) continue;
+						p_entries[selected_entries++] = &entries[i];
+						entry_hint = i;
+					}
+					// now sort all ptrs to selected entries
+					std::sort(p_entries, p_entries+selected_entries, [](entry* &lhs, entry* &rhs) -> bool { return lhs->tp < rhs->tp; });
+					// then print and free each one...
+					for(size_t i = 0; i < selected_entries; ++i) {
+						// otherwise print and reset it
+						p_entries[i]->to_stream(*elog_ostr);
+						p_entries[i]->reset();
+					}
+				}
+			}
+		));
+	}
 	status.store(s_init, std::memory_order_release);
 }
 
@@ -170,7 +208,8 @@ void elog::logger::cleanup(void) {
 	// do the cleanup
 	elog_stop = true;
 	elog_th_stream->join();
-	// one last scan through all avaliable logs and print!
+	// for now don't bother about strict
+	// ordering when closing up...
 	for(size_t i = 0; i < entry_sz; ++i) {
 		if(!entries[i].is_filled()) continue;
 		// otherwise print and reset it

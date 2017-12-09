@@ -32,6 +32,8 @@
 
 namespace elog {
 
+	class logger;
+
 	static const uint8_t	level_debug = 0x01,
 				level_info = 0x02,
 				level_warning = 0x04,
@@ -190,6 +192,8 @@ namespace elog {
 			*cur_buf++ = level;
 			write_pvt(args...);
 		}
+
+		friend class logger;
 	};
 
 	class logger {
@@ -218,7 +222,7 @@ namespace elog {
 	public:
 		static logger& instance(void);
 
-		void init(const char* fname, const size_t e_sz = 16*1024);
+		void init(const char* fname, const bool s_ordering = true, const size_t e_sz = 16*1024);
 
 		void cleanup(void);
 
