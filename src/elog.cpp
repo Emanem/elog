@@ -146,19 +146,14 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 	entries = new entry[entry_sz];
 	elog_stop = false;
 	elog_ostr = std::shared_ptr<std::ofstream>(new std::ofstream(fname));
-	// why do we have duplicated code like this to manage the log
-	// ordering level?
-	// using a std::function<void (void)> would imply basically
-	// a virtual call... we should refactor this, but using local
-	// functions...
+	// use locally defined lambdas to manage log printing
+	// much more efficient than a std::function<void (void)> which
+	// basically implies a virtual call
 	if(!s_ordering) {
 		elog_th_stream = std::shared_ptr<std::thread>(new std::thread(
 			[this]() -> void {
-				while(!elog_stop) {
-					// wait for a notification
-					std::unique_lock<std::mutex> l_(elog_th_mtx);
-					cv_notify_log.wait_for(l_, std::chrono::milliseconds(250));
-					// then scan through all avaliable logs and print!
+				auto l_print_unordered = [&]() {
+					//scan through all avaliable logs and print!
 					for(size_t i = 0; i < entry_sz; ++i) {
 						if(!entries[i].is_filled()) continue;
 						// otherwise print and reset it
@@ -166,17 +161,22 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 						entries[i].reset();
 						entry_hint = i;
 					}
+				};
+				// main loop
+				while(!elog_stop) {
+					// wait for a notification
+					std::unique_lock<std::mutex> l_(elog_th_mtx);
+					cv_notify_log.wait_for(l_, std::chrono::milliseconds(250));
+					l_print_unordered();
 				}
+				l_print_unordered();
 			}
 		));
 	} else {
 		elog_th_stream = std::shared_ptr<std::thread>(new std::thread(
 			[this]() -> void {
 				entry*	p_entries[entry_sz];
-				while(!elog_stop) {
-					// wait for a notification
-					std::unique_lock<std::mutex> l_(elog_th_mtx);
-					cv_notify_log.wait_for(l_, std::chrono::milliseconds(250));
+				auto l_print_ordered = [&]() {
 					// get current timepoint
 					const auto	log_tp = std::chrono::high_resolution_clock::now();
 					// then scan through all avaliable logs and select them!
@@ -196,7 +196,15 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 						p_entries[i]->to_stream(*elog_ostr);
 						p_entries[i]->reset();
 					}
+				};
+				// main loop
+				while(!elog_stop) {
+					// wait for a notification
+					std::unique_lock<std::mutex> l_(elog_th_mtx);
+					cv_notify_log.wait_for(l_, std::chrono::milliseconds(250));
+					l_print_ordered();
 				}
+				l_print_ordered();
 			}
 		));
 	}
@@ -208,24 +216,17 @@ void elog::logger::cleanup(void) {
 	size_t	cur_status = s_init;
 	if(!status.compare_exchange_strong(cur_status, s_start_clean))
 		return;
-	// do the cleanup
+	// do the cleanup - note, we don't need to do one last round of log
+	// saving because it's done in the body of the thread...
 	elog_stop = true;
 	elog_th_stream->join();
-	// for now don't bother about strict
-	// ordering when closing up...
-	for(size_t i = 0; i < entry_sz; ++i) {
-		if(!entries[i].is_filled()) continue;
-		// otherwise print and reset it
-		entries[i].to_stream(*elog_ostr);
-		entries[i].reset();
-	}
 	delete [] entries;
 	elog_ostr.reset();
 	status.store(s_not_init, std::memory_order_release);
 }
 
 elog::entry* elog::logger::get_entry(void) {
-	if(status != s_init) throw exception("elog not initialized");
+	if(status != s_init) throw exception("elog not initialized/about to clean up");
 #ifdef PERF_TEST
 	size_t	lcl_tries = 0;
 #endif //PERF_TEST
@@ -238,7 +239,7 @@ elog::entry* elog::logger::get_entry(void) {
 #ifdef PERF_TEST
 				lcl_tries += i;
 				entries[cur_entry].tries = lcl_tries;
-#endif //#ifdef PERF_TEST
+#endif //PERF_TEST
 				return &entries[cur_entry];
 			}
 		};
