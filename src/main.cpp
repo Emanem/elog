@@ -18,6 +18,8 @@
 */
 
 #include "elog.h"
+#include <thread>
+#include <list>
 
 int main(int argc, const char *argv[]) {
 	// some static asserts to ensure we have
@@ -26,11 +28,18 @@ int main(int argc, const char *argv[]) {
 
 	ELOG_INIT("test.log");
 	ELOG_DEBUG("This ", "is ", "a ", 123, " test!");
-	for(size_t i = 0; i < 1024*1024; ++i) {
-		ELOG_INFO(__FILE__, ':', __LINE__, " a counter number: ", i);
-		ELOG_FATAL("This is a test!");
-		//if(i > 512*1024) ELOG_SET_LEVEL(elog::level_fatal);
+	// add threads to print the log
+	std::list<std::thread>	th_list;
+	for(int i = 0; i < 4; ++i) {
+		th_list.push_back(std::thread([]() -> void {
+			for(size_t j = 0; j < 1024*1024; ++j) {
+				ELOG_INFO(__FILE__, ':', __LINE__, " a counter number: ", j);
+				ELOG_FATAL("This is a test!");
+				//if(j > 512*1024) ELOG_SET_LEVEL(elog::level_fatal);
+			}
+		}));
 	}
+	for(auto& i : th_list) i.join();
 	ELOG_CLEANUP();
 }
 
