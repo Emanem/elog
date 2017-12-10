@@ -32,10 +32,25 @@ ELOG_CLEANUP();
 ```
 
 ## F.A.Q.s
-*Section to come*
+
+### Is this code working only for a specific platform?
+I have developed primarily on Linux (Ubuntu 16.04.03) altough I have used std interfaces as much as I can - this code should be used as it is on Windows/MaxOS/... .
+
+### I've has a look at the _macros_ and would like to invoke the *elog* API directly. What do the paramters for *elog::logger::init* achieve really?
+Following a quick summary:
+1. *fname* will specify the base filename of the log
+2. *s_ordering* will have the separated writing logger I/O thread ordering the log events - adds a tiny bit more of CPU but makes the log stricly sequential
+3. *e_sz* specifies how many entries are pre-allocated in the logging table - this is a control parameter that you can tune depending on how many threads and how frequently those are writing into the log
+
+### Can you describe a bit the *inner guts* of this logging framework?
+*to come*
 
 ## License
 This software is licensed under the LGPLv3, so you can include the header in your source code and just say thanks - no need to release your sources (unless you modify the template that is).
 
 ### Other licensing
 I'm also open to potentially let people use this under another license, better suited to commercial firms; please contact me in case you may be interested - altough at this *early* stage I don't see why you would be...
+
+## Acknowledgements & thanks
+Would like to thank very much *Carl Cook* for his inspirational speeches [2016 C++](https://www.youtube.com/watch?v=ulOLGX3HNCI) and [CppCon 2017](https://www.youtube.com/watch?v=NH1Tta7purM) - he also has a [Github](https://github.com/carlcook) account (I swear I was inspired by talks, no copy of his *variadicLogging* or *FastLogger*).
+
