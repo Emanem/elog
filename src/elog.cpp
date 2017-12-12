@@ -88,7 +88,7 @@ namespace {
 					const auto 	index = std::atol(std::string(m[1].first, m[2].second).c_str());
 					logs_refs[index] = dir_name + '/' + cur_f_name;
 				}
-		}
+			}
 			closedir(dir_p);
 		} else {
 			throw elog::exception(std::string("Can't open log directory: ") + dir_name);
@@ -112,7 +112,7 @@ namespace {
 
 std::condition_variable	elog::cv_notify_log;
 
-void elog::entry::to_stream(std::ostream& ostr) const {
+int elog::entry::to_stream(std::ostream& ostr) const {
 	// start printing out the timestamp in ISO format
 	// and the thread_id
 	using namespace std::chrono;
@@ -127,6 +127,8 @@ void elog::entry::to_stream(std::ostream& ostr) const {
 
 	const uint8_t	*lcl_type = typelist,
 			*lcl_buf = buffer;
+	// try to get the pos counter
+	const auto	s_pos = ostr.tellp();
 	// first preamble
 	ostr << tm_buf << " [" << th_id << "](" << get_level_str(*lcl_buf++) << ") ";
 	// proceed with each type
@@ -176,6 +178,7 @@ void elog::entry::to_stream(std::ostream& ostr) const {
 #else
 	ostr << std::endl;
 #endif //PERF_TEST
+	return ostr.tellp() - s_pos;
 }
 
 elog::exception::exception(const char* e): std::runtime_error(e) {
@@ -188,7 +191,7 @@ elog::logger::~logger() {
 	cleanup();
 }
 
-void elog::logger::init(const char* fname, const bool s_ordering, const size_t e_sz) {
+void elog::logger::init(const char* fname, const bool s_ordering, const size_t e_sz, const int roll_log_sz) {
 	// check is not being already initialized...
 	size_t	cur_status = s_not_init;
 	if(!status.compare_exchange_strong(cur_status, s_start_init))
@@ -203,15 +206,20 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 	// basically implies a virtual call
 	if(!s_ordering) {
 		elog_th_stream = std::shared_ptr<std::thread>(new std::thread(
-			[this]() -> void {
+			[roll_log_sz,this]() -> void {
+				int	wb = 0;
 				auto l_print_unordered = [&]() {
 					//scan through all avaliable logs and print!
 					for(size_t i = 0; i < entry_sz; ++i) {
 						if(!entries[i].is_filled()) continue;
 						// otherwise print and reset it
-						entries[i].to_stream(*elog_ostr);
+						wb += entries[i].to_stream(*elog_ostr);
 						entries[i].reset();
 						entry_hint = i;
+						if(wb > roll_log_sz && roll_log_sz > 0) {
+							roll_logs();
+							wb = 0;
+						}
 					}
 				};
 				// main loop
@@ -226,7 +234,8 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 		));
 	} else {
 		elog_th_stream = std::shared_ptr<std::thread>(new std::thread(
-			[this]() -> void {
+			[roll_log_sz,this]() -> void {
+				int	wb = 0;
 				entry*	p_entries[entry_sz];
 				auto l_print_ordered = [&]() {
 					// get current timepoint
@@ -245,8 +254,12 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 					// then print and free each one...
 					for(size_t i = 0; i < selected_entries; ++i) {
 						// otherwise print and reset it
-						p_entries[i]->to_stream(*elog_ostr);
+						wb += p_entries[i]->to_stream(*elog_ostr);
 						p_entries[i]->reset();
+						if(wb > roll_log_sz && roll_log_sz > 0) {
+							roll_logs();
+							wb = 0;
+						}
 					}
 				};
 				// main loop

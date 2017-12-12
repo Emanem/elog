@@ -188,7 +188,7 @@ namespace elog {
 			status.store(s_free, std::memory_order_release);
 		}
 
-		void to_stream(std::ostream& ostr) const;
+		int to_stream(std::ostream& ostr) const;
 
 		template<typename... Args>
 		void write(const uint8_t level, Args... args) {
@@ -231,7 +231,7 @@ namespace elog {
 			return l;
 		}
 
-		void init(const char* fname, const bool s_ordering = true, const size_t e_sz = 16*1024);
+		void init(const char* fname, const bool s_ordering = true, const size_t e_sz = 16*1024, const int roll_log_sz = 64*1024*1024);
 
 		void cleanup(void);
 
