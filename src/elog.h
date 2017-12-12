@@ -35,6 +35,7 @@ namespace elog {
 	class exception : public std::runtime_error {
 	public:
 		exception(const char*);
+		exception(const std::string&);
 	};
 
 	class logger;

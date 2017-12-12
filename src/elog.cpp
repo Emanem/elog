@@ -23,12 +23,17 @@
 #include <fstream>
 #include <ctime>
 #include <algorithm>
+#include <map>
+#include <cstring>
+#include <dirent.h>
+#include <regex>
 
 namespace {
 	std::atomic<bool>		elog_stop(false);
 	std::mutex			elog_th_mtx;
 	std::shared_ptr<std::thread>	elog_th_stream;
 	std::shared_ptr<std::ofstream>	elog_ostr;
+	std::string			elog_fname;
 
 	const char* get_level_str(const uint8_t level) {
 		switch(level) {
@@ -53,6 +58,55 @@ namespace {
 	void to_stream_el(std::ostream& ostr, const uint8_t*& p) {
 		ostr << *reinterpret_cast<const T*>(p);
 		p += sizeof(T);
+	}
+
+	// roll the log files
+	void roll_logs(void) {
+		// get directories entries
+		const char*			f_sep = std::strrchr(elog_fname.c_str(), '/');
+		// if we can find this char, then this is going to be the directory
+		const std::string		dir_name = (f_sep) ? std::string(elog_fname.c_str(), f_sep) : ".",
+						file_name = (f_sep) ? std::string(f_sep+1) : elog_fname;
+		DIR 				*dir_p = 0;
+		struct dirent 			*ent_p = 0;
+		std::map<long, std::string>	logs_refs;
+		if((dir_p = opendir(dir_name.c_str()))) {
+			// escape the name string for regex
+			const std::regex	esc("[.^$|()\\[\\]{}*+?\\\\]");
+			const std::string	rep("\\&"),
+						f_regex_expr = std::regex_replace(file_name, esc, rep, std::regex_constants::match_default | std::regex_constants::format_sed) + "\\.([0-9]+)";
+			const std::regex	f_regex(f_regex_expr);
+			while((ent_p = readdir(dir_p))) {
+				// skip directories
+				if(ent_p->d_type == DT_DIR) continue;
+				std::smatch		m;
+				const std::string	cur_f_name(ent_p->d_name);
+				if(std::regex_match(cur_f_name, m, f_regex)) {
+					// given we're asking for a single match, we need to
+					// have 2 entries
+					if(m.size() != 2) continue;
+					const auto 	index = std::atol(std::string(m[1].first, m[2].second).c_str());
+					logs_refs[index] = dir_name + '/' + cur_f_name;
+				}
+		}
+			closedir(dir_p);
+		} else {
+			throw elog::exception(std::string("Can't open log directory: ") + dir_name);
+		}
+		// if we got all, perform file rolling then
+		for(auto i = logs_refs.rbegin(); i != logs_refs.rend(); ++i) {
+			const std::string	tgt_filename = elog_fname + "." + std::to_string(i->first+1);
+			if(std::rename(i->second.c_str(), tgt_filename.c_str()))
+				throw elog::exception("Can't rename log file '" + i->second + "' to '" + tgt_filename + "'");
+		}
+		// close and roll current file, then re-open
+		elog_ostr->close();
+		const std::string	tgt_filename = elog_fname + ".0";
+		if(std::rename(elog_fname.c_str(), tgt_filename.c_str()))
+			throw elog::exception("Can't rename log file '" + elog_fname + "' to '" + tgt_filename + "'");
+		elog_ostr->open(elog_fname);
+		if(!elog_ostr->good())
+			throw elog::exception("Can't reopen log file '" + elog_fname + "'");
 	}
 }
 
@@ -125,6 +179,9 @@ void elog::entry::to_stream(std::ostream& ostr) const {
 }
 
 elog::exception::exception(const char* e): std::runtime_error(e) {
+}
+
+elog::exception::exception(const std::string& e): std::runtime_error(e) {
 }
 
 elog::logger::~logger() {
@@ -203,6 +260,7 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 			}
 		));
 	}
+	elog_fname = fname;
 	status.store(s_init, std::memory_order_release);
 }
 
