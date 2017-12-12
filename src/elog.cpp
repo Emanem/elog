@@ -131,11 +131,6 @@ elog::logger::~logger() {
 	cleanup();
 }
 
-elog::logger& elog::logger::instance(void) {
-	static logger	l;
-	return l;
-}
-
 void elog::logger::init(const char* fname, const bool s_ordering, const size_t e_sz) {
 	// check is not being already initialized...
 	size_t	cur_status = s_not_init;
@@ -223,30 +218,5 @@ void elog::logger::cleanup(void) {
 	delete [] entries;
 	elog_ostr.reset();
 	status.store(s_not_init, std::memory_order_release);
-}
-
-elog::entry* elog::logger::get_entry(void) {
-	if(status != s_init) throw exception("elog not initialized/about to clean up");
-#ifdef PERF_TEST
-	size_t	lcl_tries = 0;
-#endif //PERF_TEST
-	while(true) {
-		const size_t	cur_hint = entry_hint;
-		for(size_t i = 0; i < entry_sz; ++i) {
-			const size_t	cur_entry = (i+cur_hint)%entry_sz;
-			if(entries[cur_entry].try_assign()) {
-				entry_hint = (cur_entry+1)%entry_sz;
-#ifdef PERF_TEST
-				lcl_tries += i;
-				entries[cur_entry].tries = lcl_tries;
-#endif //PERF_TEST
-				return &entries[cur_entry];
-			}
-		};
-#ifdef PERF_TEST
-		lcl_tries += entry_sz;
-#endif //PERF_TEST
-		std::this_thread::yield();
-	}
 }
 
