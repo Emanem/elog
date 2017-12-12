@@ -28,6 +28,9 @@
 #include <dirent.h>
 #include <regex>
 
+#define LIKELY(x)       __builtin_expect(!!(x),1)
+#define UNLIKELY(x)     __builtin_expect(!!(x),0)
+
 namespace {
 	std::atomic<bool>		elog_stop(false);
 	std::mutex			elog_th_mtx;
@@ -201,6 +204,10 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 	entries = new entry[entry_sz];
 	elog_stop = false;
 	elog_ostr = std::shared_ptr<std::ofstream>(new std::ofstream(fname));
+	if(!elog_ostr->good()) {
+		delete [] entries;
+		throw exception(std::string("Can't open log file '") + fname + "'");
+	}
 	// use locally defined lambdas to manage log printing
 	// much more efficient than a std::function<void (void)> which
 	// basically implies a virtual call
@@ -216,7 +223,7 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 						wb += entries[i].to_stream(*elog_ostr);
 						entries[i].reset();
 						entry_hint = i;
-						if(wb > roll_log_sz && roll_log_sz > 0) {
+						if(UNLIKELY(wb > roll_log_sz && roll_log_sz > 0)) {
 							roll_logs();
 							wb = 0;
 						}
@@ -256,7 +263,7 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 						// otherwise print and reset it
 						wb += p_entries[i]->to_stream(*elog_ostr);
 						p_entries[i]->reset();
-						if(wb > roll_log_sz && roll_log_sz > 0) {
+						if(UNLIKELY(wb > roll_log_sz && roll_log_sz > 0)) {
 							roll_logs();
 							wb = 0;
 						}
