@@ -21,6 +21,10 @@
 #include <thread>
 #include <list>
 
+void __attribute__ ((noinline)) compile_log_optimized(void) {
+	ELOG_INFO(123, 456.789); 
+}
+
 int main(int argc, const char *argv[]) {
 	// some static asserts to ensure we have
 	// control over structure sizes...

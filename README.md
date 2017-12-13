@@ -41,6 +41,7 @@ Following a quick summary:
 1. *fname* will specify the base filename of the log
 2. *s_ordering* will have the separated writing logger I/O thread ordering the log events - adds a tiny bit more of CPU but makes the log stricly sequential
 3. *e_sz* specifies how many entries are pre-allocated in the logging table - this is a control parameter that you can tune depending on how many threads and how frequently those are writing into the log
+4. *roll_log_sz* specified how many bytes we can write into the logfile before it gets rolled (i.e. renamed to *log name*.0, then *log name*.1 and so on ...)
 
 ### Can you describe a bit the *inner guts* of this logging framework?
 *to come*
