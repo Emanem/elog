@@ -88,7 +88,7 @@ namespace {
 					// given we're asking for a single match, we need to
 					// have 2 entries
 					if(m.size() != 2) continue;
-					const auto 	index = std::atol(std::string(m[1].first, m[2].second).c_str());
+					const auto 	index = std::atol(std::string(m[1].first, m[1].second).c_str());
 					logs_refs[index] = dir_name + '/' + cur_f_name;
 				}
 			}
