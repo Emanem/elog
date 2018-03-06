@@ -195,6 +195,9 @@ elog::logger::~logger() {
 }
 
 void elog::logger::init(const char* fname, const bool s_ordering, const size_t e_sz, const int roll_log_sz) {
+	// some static asserts to ensure we have
+	// control over structure sizes...
+	static_assert(sizeof(elog::entry)==512, "Size of elog::entry is not 512 B");
 	// check is not being already initialized...
 	size_t	cur_status = s_not_init;
 	if(!status.compare_exchange_strong(cur_status, s_start_init))
@@ -206,7 +209,7 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 	elog_ostr = std::shared_ptr<std::ofstream>(new std::ofstream(fname));
 	if(!elog_ostr->good()) {
 		delete [] entries;
-		throw exception(std::string("Can't open log file '") + fname + "'");
+		throw elog::exception(std::string("Can't open log file '") + fname + "'");
 	}
 	// use locally defined lambdas to manage log printing
 	// much more efficient than a std::function<void (void)> which
