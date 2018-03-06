@@ -30,11 +30,41 @@ ELOG_SET_LEVEL(elog::level_all); // print everything again - default
 ...
 ELOG_CLEANUP();
 ```
+A more comprehensive way of using it would be (in *main*):
+``` c++
+int main(int argc, char *argv[]) {
+	try {
+		ELOG_INIT("mylogfile.log");
+		...
+		...
+		...
+		...
+		ELOG_INFO("Some ", "info ", "here! ", 4.5, -123);
+		...
+		...
+		ELOG_DEBUG("Some ", "debug");
+		...
+		...
+		ELOG_CLEANUP();
+	} catch(const elog::exception& e) {
+		std::cerr << "elog exception: " << e.what() << std::endl;
+		return -1;
+	} catch(const std::exception& e) {
+		ELOG_ERROR("Exception: ", e.what());
+		ELOG_CLEANUP();
+		return -2;
+	} catch(...) {
+		ELOG_ERROR("Unknownw exception");
+		ELOG_CLEANUP();
+		return -3;
+	}
+}
+```
 
 ## F.A.Q.s
 
 ### Is this code working only for a specific platform?
-I have developed primarily on Linux (Ubuntu 16.04.03) altough I have used std interfaces as much as I can - this code should be used as it is on Windows/MaxOS/... .
+I have developed primarily on Linux (Ubuntu 16.04.3) altough I have used *std* interfaces as much as I can - this code should be used as it is on Windows/MacOS/... .
 
 ### I've has a look at the _macros_ and would like to invoke the *elog* API directly. What do the paramters for *elog::logger::init* achieve really?
 Following a quick summary:
