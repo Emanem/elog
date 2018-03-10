@@ -55,7 +55,7 @@ namespace elog {
 		std::thread::id		th_id;
 		uint8_t			*cur_type,
 					*cur_buf,
-					typelist[16],
+					typelist[24],
 					buffer[512 - 
 						(sizeof(status)+
 						sizeof(tp)+
