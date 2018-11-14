@@ -257,7 +257,6 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 						// ensure tp <= log_tp...
 						if(entries[i].tp > log_tp) continue;
 						p_entries[selected_entries++] = &entries[i];
-						entry_hint = i;
 					}
 					// now sort all ptrs to selected entries
 					std::sort(p_entries, p_entries+selected_entries, [](entry* &lhs, entry* &rhs) -> bool { return lhs->tp < rhs->tp; });
@@ -266,6 +265,7 @@ void elog::logger::init(const char* fname, const bool s_ordering, const size_t e
 						// otherwise print and reset it
 						wb += p_entries[i]->to_stream(*elog_ostr);
 						p_entries[i]->reset();
+						entry_hint = i;
 						if(UNLIKELY(wb > roll_log_sz && roll_log_sz > 0)) {
 							roll_logs();
 							wb = 0;
